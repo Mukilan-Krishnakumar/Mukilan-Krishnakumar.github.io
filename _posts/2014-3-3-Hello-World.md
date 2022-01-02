@@ -1,10 +1,199 @@
 ---
 layout: post
-title: You're up and running!
+title: 'Natural Language Processing with Disaster Tweets : Part 1'
+published: true
 ---
+## Tweet to save lives
+Kaggle offers a starting competition for Natural Language Processing (NLP) Practitioners. This competition is NLP with Disaster Tweets. In this blog post we will create a baseline NLP model with the Deep Learning framework TensorFlow.
 
-Next you can update your site name, avatar and other options using the _config.yml file in the root of your repository (shown below).
+Our model is not the best model out there, it might even be the least performing model but understanding the basics is more important than getting good scores in our first ever NLP model. Let’s get started.
 
-![_config.yml]({{ site.baseurl }}/images/config.png)
+The code for this tutorial can be found here:
+https://github.com/Mukilan-Krishnakumar/NLP_With_Disaster_Tweets/blob/main/NLP_with_Disaster_Tweets_Part_1.ipynb
 
-The easiest way to make your first post is to edit this one. Go into /_posts/ and update the Hello World markdown file. For more instructions head over to the [Jekyll Now repository](https://github.com/barryclark/jekyll-now) on GitHub.
+![Communicating humans]({{site.baseurl}}/_posts/pexels-shvets-production-7516578.jpg)
+
+Photo by SHVETS production from Pexels
+
+# What is NLP?
+
+NLP stands for Natural Language Processing, it is the ability of a computer to understand human text and process it to give meaningful output. NLP is used in wide areas of interest ranging from setting up alarm with your voice assistant to complicated things like Google Translate and Automatic Captions in YouTube.
+# Introduction
+
+We are going to create a baseline NLP model with TensorFlow, this model is similar to the model which I learnt from the Coursera Course on Natural Language Processing taught by Laurence Moroney.
+
+I am going to implement the model and improve upon it. This is part 1 of the NLP with Disaster Tweets series and we will gradually improve the model.
+
+📌 Note : As we are trying to get to the juice of model building this part doesn’t cover EDA. EDA will be done in the subsequent parts.
+
+    Let’s get started.
+
+# Downloading Dataset From Kaggle
+
+To download dataset directly from kaggle we need to install kaggle in this machine. We also need to download a file called kaggle.json. This can be downloaded from Your Account -> Account -> API -> Generate Token.
+
+We need to upload this file to our colab runtime. Keep in mind that if you are using normal Colab, an uploaded file would be recycled.
+
+We create a folder called kaggle and copy our json file into that folder.
+
+We run chmod 600 which means only the owner of the file has full read and write acces to it.
+
+We can download the kaggle dataset using kaggle competitions download nlp-getting-started.
+
+📌 Note : If you didn’t click Join Competition in kaggle, you won’t be able to download the dataset.
+
+I did make that mistake so please be careful.
+
+	! pip install kaggle
+    ! mkdir ~/.kaggle
+    ! cp kaggle.json ~/.kaggle/
+    ! chmod 600 ~/.kaggle/kaggle.json
+    ! kaggle competitions download nlp-getting-started
+    ! unzip nlp-getting-started.zip
+
+# Importing Necessary Modules
+
+We are going to import few necessary python modules to create our model.
+
+We will be importing the following modules:
+
+    Pandas — For data manipulation and analysis
+    Numpy — For array manipulation
+    Matplotlib.pyplot — For plotting graphs and visualising data
+    Seaborn — For high level visualisation
+    Re — For using Regular Expressions (RegEx)
+    TensorFlow — For building our Neural Network
+
+We will also import Tokenizer and pad_sequences. As the official documentation states:
+
+    Tokenizer : This class allows to vectorise a text corpus, by turning each text into either a sequence of integers (each integer being the index of a token in a dictionary) or into a vector where the coefficient for each token could be binary, based on word count, based on tf-idf.
+    pad_sequences : This function transforms a list (of length num_samples) of sequences (lists of integers) into a 2D Numpy array of shape (num_samples, num_timesteps). It essentially adds padding to sentences to make them of equal length.
+
+import pandas as pdimport numpy as npimport matplotlib.pyplot as pltimport seaborn as snsimport reimport tensorflow as tffrom tensorflow.keras.preprocessing.text import Tokenizerfrom tensorflow.keras.preprocessing.sequence import pad_sequences
+
+We need to convert our csv file into a Pandas DataFrame.
+
+After converting we see the first 5 rows.
+
+	df = pd.read_csv('/content/train.csv')
+    df_test = pd.read_csv('/content/train.csv')
+    df.head()
+    df['text']
+
+# Cleaning Data
+
+If we scroll a bit to the right in the df['text'], we can see many URLS and Uppercased Words. URLs are meaningless to our model and using Uppercase words bring redundancy in our word index.
+
+We remove these both using a custom function called cleaningText which removes URLs and lowercases all sentences.
+
+	def cleaningText(df):
+    '''This function gets a dataframe object as an input 
+    and removes the URLs from text column and makes every 
+    sentence lowercase.'''
+    df['text'] = [re.sub(r'http\S+', '', x, flags=re.MULTILINE) for x in df['text']]
+    df['text'] = df['text'].str.lower()cleaningText(df)df.head()
+
+After running our custom function, we can store the text and label into individual lists.
+
+	sentences = [x for x in df['text']]
+    labels = [x for x in df['target']]
+    print(sentences[:100])
+
+We make sure our labels are numerical values and are stored in Numpy arrays by using np.array.
+
+We split the data into training and testing data based on 80/20 rule.
+
+We have about 8000 records, we take the first 6090 to be training and the rest to be testing.
+
+	labels = np.array(labels)
+    training_sentences = sentences[:6090]
+    training_labels = labels[:6090]
+    testing_sentences = sentences[6090:]
+    testing_labels = labels[6090:]
+
+# Model Parameters
+
+We need to specify a few things before we build our very own NLP model.
+
+We need to set up vocab_size, this is the maximum number of words we can store in our very own dictionary of sorts. We set it to 10000.
+
+We need to set up embedding_dim, embedding is a relatively low-dimensional space into which you can translate high-dimensional vectors. Embeddings make it easier to do machine learning on large inputs like sparse vectors representing words. We set it to 16.
+
+A tweet can be 280 characters long, so we will set max_length to be 280.
+
+We do padding on the end, in computer lingo this is called post-padding. We will set up trunc-type to post.
+
+If our model is faced with a new word it has not seen before, it will categorize it to Out-Of-Vocabulary, so we will set up oov_tok to be \<OOV>.
+
+What we are going to do is convert all the words in our sentences into a dictionary of sorts (word_index) which allots individual tokens to each words.
+
+Our ML model can never work on text data, so we use this tokenizing mechanism to convert our sentences into sequences, they are numerical representation of our sentences. We pad them to make all the sequences be of same length.
+
+We do the same for testing sequences and labels.
+
+	vocab_size = 10000
+  	embedding_dim = 16
+  	max_length = 280
+  	trunc_type='post'
+  	oov_tok = "<OOV>"
+  	tokenizer = Tokenizer(num_words = vocab_size,oov_token=oov_tok)
+  	tokenizer.fit_on_texts(training_sentences)
+  	word_index = tokenizer.word_index
+  	sequences = tokenizer.texts_to_sequences(training_sentences)
+  	padded = pad_sequences(sequences,maxlen=max_length, truncating=trunc_type)
+  	testing_sequences = tokenizer.texts_to_sequences(testing_sentences)
+  	testing_padded = pad_sequences(testing_sequences,maxlen=max_length)
+  
+  
+  
+  
+# Model Building
+
+Finally, we getting to the juice of this tutorial. We are building our very own ML model.
+
+We will be building a Sequential model.
+
+We use the following layers:
+
+    Embedding layer — Turns positive integers (indexes) into dense vectors of fixed size. This basically converts our sequences into vectors.
+    GloabalAveragePooling1D — Global average pooling operation for temporal data. It basically computes the maximum of imput channels, finds the most relevant information.
+    Dense layers — One used with activation relu for achieving lower loss and another with sigmoid for classifying our tweet into either 1 (Disaster) or 0 (Not a Disaster).
+
+We will compile our model with binary_crossentropy as our loss because we only have binary classes (1 and 0).
+
+We will use Adam optimizer along with accuracy as metrics.
+
+We can visualise the layers of our model with model.summary().
+
+	model = tf.keras.Sequential([
+    tf.keras.layers.Embedding(vocab_size,embedding_dim,input_length = max_length),
+    tf.keras.layers.GlobalAveragePooling1D(),
+    tf.keras.layers.Dense(6, activation = "relu"),
+    tf.keras.layers.Dense(1, activation = "sigmoid")])
+    model.compile(loss='binary_crossentropy',optimizer='adam',metrics=['accuracy'])
+    model.summary()
+
+Model summary shows the layers of model
+![Model summary shown]({{site.baseurl}}/_posts/Model_Summary.png)
+Image by Author
+
+We will make our model run 10 times (epochs = 10).
+
+We will fit our model on training data and labels, we will evaluate on testing data.
+
+We will set randoms seed to be 42 to get reproducible results.
+
+	np.random.seed(42)
+    num_epochs = 10
+    model.fit( 	padded, 
+    			training_labels,
+    			epochs = num_epochs, 
+                validation_data = (testing_padded, testing_labels))
+
+model accuracy printed
+![Model accuracy printed]({{site.baseurl}}/_posts/First_NLP_Model_Accuracy.png)
+Image by Author
+
+Wow, my model is only able to get 77% validation accuracy. This is much better than our model guessing, we can improve this score by doing EDA and building a better model. For now, this is good enough.
+
+We have built a Neural Network which is able to perform reasonably well on Disaster Tweets, we have built a baseline NLP model.
